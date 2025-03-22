@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Website } from '../types';
 
+function normalizeUrl(url: string): string {
+  let normalized = url.toLowerCase().trim();
+  if (!normalized.startsWith('http')) {
+    normalized = `https://${normalized}`;
+  }
+  return normalized.replace(/\/+$/, ''); // Remove trailing slashes
+}
+
 async function checkSSL(url: string): Promise<{ status: Website['status']; expiryDate: string; lastChecked: string }> {
   try {
     const controller = new AbortController();
@@ -39,21 +47,22 @@ export function useWebsites() {
   }, [websites]);
 
   const addWebsite = (url: string) => {
-    const formattedUrl = url.toLowerCase().trim();
-    if (!formattedUrl.startsWith('http')) {
-      url = `https://${formattedUrl}`;
-    }
+    const normalizedUrl = normalizeUrl(url);
+    
+    // Check for duplicates
+    const exists = websites.some(w => normalizeUrl(w.url) === normalizedUrl);
+    if (exists) return;
 
     const newWebsite: Website = {
       id: crypto.randomUUID(),
-      url,
+      url: normalizedUrl,
       lastChecked: new Date().toISOString(),
       status: 'error',
     };
     setWebsites(prev => [...prev, newWebsite]);
 
     // Check SSL after adding
-    checkSSL(url).then(({ status, expiryDate, lastChecked }) => {
+    checkSSL(normalizedUrl).then(({ status, expiryDate, lastChecked }) => {
       setWebsites(prev =>
         prev.map(website =>
           website.id === newWebsite.id
@@ -65,17 +74,18 @@ export function useWebsites() {
   };
 
   const updateWebsite = (id: string, url: string) => {
-    const formattedUrl = url.toLowerCase().trim();
-    if (!formattedUrl.startsWith('http')) {
-      url = `https://${formattedUrl}`;
-    }
+    const normalizedUrl = normalizeUrl(url);
+    
+    // Check for duplicates except self
+    const exists = websites.some(w => w.id !== id && normalizeUrl(w.url) === normalizedUrl);
+    if (exists) return;
 
     setWebsites(prev =>
       prev.map(website =>
         website.id === id
           ? {
               ...website,
-              url,
+              url: normalizedUrl,
               lastChecked: new Date().toISOString(),
             }
           : website
@@ -83,7 +93,7 @@ export function useWebsites() {
     );
 
     // Check SSL after updating
-    checkSSL(url).then(({ status, expiryDate, lastChecked }) => {
+    checkSSL(normalizedUrl).then(({ status, expiryDate, lastChecked }) => {
       setWebsites(prev =>
         prev.map(website =>
           website.id === id
@@ -115,8 +125,10 @@ export function useWebsites() {
 
   const importWebsites = async (file: File) => {
     const content = await file.text();
-    const urls = content.split('\n').map(url => url.trim()).filter(Boolean);
-    const existingUrls = new Set(websites.map(w => w.url));
+    const urls = content.split('\n')
+      .map(url => normalizeUrl(url))
+      .filter(Boolean);
+    const existingUrls = new Set(websites.map(w => normalizeUrl(w.url)));
     
     for (const url of urls) {
       if (!existingUrls.has(url)) {

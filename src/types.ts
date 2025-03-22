@@ -4,6 +4,7 @@ export interface Website {
   lastChecked?: string;
   expiryDate?: string;
   status?: 'valid' | 'expired' | 'expires-soon' | 'expires-soon-warning' | 'error';
+  ip?: string;
 }
 
 export interface WebsiteFormData {

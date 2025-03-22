@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import sslChecker from 'ssl-checker';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import dns from 'dns/promises';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -16,6 +17,7 @@ async function createServer() {
   app.post('/ssl/api/check-ssl', async (req, res) => {
     try {
       const { hostname } = new URL(req.body.url);
+      const addresses = await dns.resolve4(hostname);
       const result = await sslChecker(hostname);
 
       let status: Website['status'] = 'valid';
@@ -30,7 +32,8 @@ async function createServer() {
       return res.json({
         status,
         expiryDate: new Date(Date.now() + (result.daysRemaining * 24 * 60 * 60 * 1000)).toISOString(),
-        lastChecked: new Date().toISOString()
+        lastChecked: new Date().toISOString(),
+        ip: addresses[0]
       });
     } catch (error) {
       console.log('check-ssl error', error);

@@ -7,6 +7,25 @@ import { CSS } from '@dnd-kit/utilities';
 import { Website, WebsiteFormData } from '../types';
 import { WebsiteForm } from './WebsiteForm';
 
+type StatusFilter = Website['status'] | null;
+
+const getStatusColor = (status: Website['status']) => {
+  switch (status) {
+    case 'valid':
+      return 'text-green-600 bg-green-50';
+    case 'expires-soon-warning':
+      return 'text-yellow-600 bg-yellow-50';
+    case 'expires-soon':
+      return 'text-orange-600 bg-orange-50';
+    case 'expired':
+      return 'text-red-600 bg-red-50';
+    case 'error':
+      return 'text-gray-600 bg-gray-50';
+    default:
+      return 'text-gray-600 bg-gray-50';
+  }
+};
+
 interface SortableWebsiteItemProps {
   website: Website;
   onRecheck: (id: string) => Promise<void>;
@@ -16,6 +35,64 @@ interface SortableWebsiteItemProps {
   setEditingId: (id: string | null) => void;
   recheckingId: string | null;
   getStatusColor: (status: Website['status']) => string;
+}
+
+interface WebsiteStatsProps {
+  websites: Website[];
+  activeFilter: StatusFilter;
+  onFilterChange: (status: StatusFilter) => void;
+}
+
+function WebsiteStats({ websites, activeFilter, onFilterChange }: WebsiteStatsProps) {
+  const stats = websites.reduce((acc, website) => {
+    acc[website.status || 'error'] = (acc[website.status || 'error'] || 0) + 1;
+    return acc;
+  }, {} as Record<Website['status'], number>);
+
+  const statusLabels: Record<Website['status'], string> = {
+    'valid': 'valid',
+    'expired': 'expired',
+    'expires-soon': 'expiring soon',
+    'expires-soon-warning': 'expiring this month',
+    'error': 'with errors'
+  };
+
+  const handleFilterClick = (status: Website['status']) => {
+    onFilterChange(activeFilter === status ? null : status);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3 text-sm">
+        {Object.entries(stats).map(([status, count]) => count > 0 && (
+          <button
+            key={status}
+            onClick={() => handleFilterClick(status as Website['status'])}
+            className={`px-2 py-1 rounded-full transition-colors ${
+              getStatusColor(status as Website['status'])
+            } ${
+              activeFilter === status ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+            } hover:ring-2 hover:ring-blue-500 hover:ring-offset-2`}
+          >
+            {count} {statusLabels[status as Website['status']]}
+          </button>
+        ))}
+      </div>
+      {activeFilter && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">
+            Showing only {statusLabels[activeFilter]} websites
+          </span>
+          <button
+            onClick={() => onFilterChange(null)}
+            className="text-sm text-blue-500 hover:text-blue-600"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SortableWebsiteItem({
@@ -95,6 +172,11 @@ function SortableWebsiteItem({
             </button>
             <div className="flex-1">
               <h3 className="font-medium text-gray-900 truncate">{website.url}</h3>
+              {website.ip && (
+                <p className="text-sm text-gray-500 mt-1">
+                  IP: {website.ip}
+                </p>
+              )}
               <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500">
                 <span className="whitespace-nowrap">Last checked: {new Date(website.lastChecked!).toLocaleString()}</span>
                 <span className={`px-2 py-1 rounded-full ${getStatusColor(website.status)}`}>
@@ -173,7 +255,13 @@ export function WebsiteList({
   const [isRecheckingAll, setIsRecheckingAll] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const filteredWebsites = websites
+    .filter(w => !statusFilter || w.status === statusFilter)
+    .filter(w => !searchQuery || w.url.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -234,23 +322,6 @@ export function WebsiteList({
     }
   };
 
-  const getStatusColor = (status: Website['status']) => {
-    switch (status) {
-      case 'valid':
-        return 'text-green-600 bg-green-50';
-      case 'expires-soon-warning':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'expires-soon':
-        return 'text-orange-600 bg-orange-50';
-      case 'expired':
-        return 'text-red-600 bg-red-50';
-      case 'error':
-        return 'text-gray-600 bg-gray-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
-    }
-  };
-
   if (websites.length === 0) {
     return (
       <div className="space-y-6">
@@ -288,6 +359,32 @@ export function WebsiteList({
 
   return (
     <div className="space-y-4">
+      <WebsiteStats
+        websites={websites}
+        activeFilter={statusFilter}
+        onFilterChange={setStatusFilter}
+      />
+      
+      <div className="relative">
+        <div className="flex items-center">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search websites..."
+            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 text-gray-400 hover:text-gray-600"
+            >
+              <span className="sr-only">Clear search</span>
+              ×
+            </button>
+          )}
+        </div>
+      </div>
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
         <div className="flex flex-wrap gap-2">
           <input
@@ -372,11 +469,11 @@ export function WebsiteList({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={websites.map(w => w.id)}
+          items={filteredWebsites.map(w => w.id)}
           strategy={verticalListSortingStrategy}
         >
           <div className="space-y-4">
-            {websites.map(website => (
+            {filteredWebsites.map(website => (
               <SortableWebsiteItem
                 key={website.id}
                 website={website}
