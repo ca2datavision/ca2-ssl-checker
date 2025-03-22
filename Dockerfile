@@ -1,7 +1,7 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci && npm i -g typescript
+RUN npm ci
 COPY . .
 RUN npm run build
 
@@ -13,7 +13,7 @@ COPY --from=builder /app/tsconfig*.json ./
 COPY --from=builder /app/tsconfig.app.json ./
 COPY --from=builder /app/tsconfig.node.json ./
 COPY --from=builder /app/server.ts ./
-RUN npm ci --production && npm i -g tsx
+RUN npm ci --omit=dev
 
 EXPOSE 3000
 CMD ["npx", "tsx", "server.ts"]
