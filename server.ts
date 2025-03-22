@@ -22,9 +22,9 @@ async function createServer() {
       if (result.daysRemaining <= 0) {
         status = 'expired';
       } else if (result.daysRemaining <= 7) {
-        status = 'expiration-warning';
+        status = 'expires-soon';
       } else if (result.daysRemaining <= 30) {
-        status = 'expiration-hint';
+        status = 'expires-soon-warning';
       }
 
       return res.json({

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pencil, Trash2, RefreshCw, Globe, RotateCw, Download, Upload, GripVertical } from 'lucide-react';
+import { Pencil, Trash2, RefreshCw, Globe, RotateCw, Download, Upload, GripVertical, Share2 } from 'lucide-react';
 import { DndContext, DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -40,7 +40,19 @@ function SortableWebsiteItem({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 1 : 0,
+    zIndex: isDragging ? 1 : 0
+  };
+
+  const handleShare = async () => {
+    try {
+      await navigator.share({
+        title: 'SSL Certificate Status',
+        text: `SSL certificate for ${website.url} is ${website.status}. Expires: ${website.expiryDate ? new Date(website.expiryDate).toLocaleDateString() : 'N/A'}`,
+        url: window.location.href
+      });
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
   };
 
   return (
@@ -56,8 +68,8 @@ function SortableWebsiteItem({
           buttonText="Save"
         />
       ) : (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center flex-1 gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center flex-1 gap-2 min-w-0">
             <button
               className="p-2 text-gray-400 cursor-grab active:cursor-grabbing touch-none"
               {...attributes}
@@ -66,19 +78,27 @@ function SortableWebsiteItem({
               <GripVertical className="w-4 h-4" />
             </button>
             <div className="flex-1">
-              <h3 className="font-medium text-gray-900">{website.url}</h3>
-              <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
-                <span>Last checked: {new Date(website.lastChecked!).toLocaleString()}</span>
+              <h3 className="font-medium text-gray-900 truncate">{website.url}</h3>
+              <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500">
+                <span className="whitespace-nowrap">Last checked: {new Date(website.lastChecked!).toLocaleString()}</span>
                 <span className={`px-2 py-1 rounded-full ${getStatusColor(website.status)}`}>
                   {website.status}
                 </span>
                 {website.expiryDate && (
-                  <span>Expires: {new Date(website.expiryDate).toLocaleDateString()}</span>
+                  <span className="whitespace-nowrap">Expires: {new Date(website.expiryDate).toLocaleDateString()}</span>
                 )}
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-end">
+            {'share' in navigator && (
+              <button
+                onClick={handleShare}
+                className="p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={() => onRecheck(website.id)}
               className={`p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100 ${
@@ -200,9 +220,9 @@ export function WebsiteList({
     switch (status) {
       case 'valid':
         return 'text-green-600 bg-green-50';
-      case 'expiration-hint':
+      case 'expires-soon-warning':
         return 'text-yellow-600 bg-yellow-50';
-      case 'expiration-warning':
+      case 'expires-soon':
         return 'text-orange-600 bg-orange-50';
       case 'expired':
         return 'text-red-600 bg-red-50';
@@ -250,8 +270,8 @@ export function WebsiteList({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        <div className="flex flex-wrap gap-2">
           <input
             type="file"
             accept=".txt"
@@ -286,7 +306,7 @@ export function WebsiteList({
         <button
           onClick={handleRecheckAll}
           disabled={isRecheckingAll}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+          className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
             isRecheckingAll ? 'cursor-wait' : ''
           }`}
         >
