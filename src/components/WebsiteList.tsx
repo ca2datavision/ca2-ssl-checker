@@ -37,6 +37,22 @@ function SortableWebsiteItem({
     isDragging
   } = useSortable({ id: website.id });
 
+  const getTimeRemaining = (expiryDate: string) => {
+    const now = new Date();
+    const expiry = new Date(expiryDate);
+    const diffMs = expiry.getTime() - now.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (diffDays > 0) {
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} remaining`;
+    } else if (diffHours > 0) {
+      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} remaining`;
+    } else {
+      return 'Expired';
+    }
+  };
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -85,7 +101,9 @@ function SortableWebsiteItem({
                   {website.status}
                 </span>
                 {website.expiryDate && (
-                  <span className="whitespace-nowrap">Expires: {new Date(website.expiryDate).toLocaleDateString()}</span>
+                  <span className="whitespace-nowrap">
+                    Expires: {new Date(website.expiryDate).toLocaleDateString()} ({getTimeRemaining(website.expiryDate)})
+                  </span>
                 )}
               </div>
             </div>
