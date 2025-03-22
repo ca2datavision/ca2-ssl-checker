@@ -3,20 +3,24 @@ import { Website } from '../types';
 
 async function checkSSL(url: string): Promise<{ status: Website['status']; expiryDate: string; lastChecked: string }> {
   try {
-
-    const response = await fetch('/ssl/api/check-ssl', {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch('/ssl/api/check-ssl', { 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ url }),
+      signal: controller.signal
     });
 
-    return await response.json();
+    clearTimeout(timeoutId);
+    const result = await response.json();
+    return result;
   } catch (error) {
     return {
       status: 'error',
-      expiryDate: new Date().toISOString(),
       lastChecked: new Date().toISOString(),
     };
   }

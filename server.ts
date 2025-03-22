@@ -33,8 +33,9 @@ async function createServer() {
         lastChecked: new Date().toISOString()
       });
     } catch (error) {
+      console.log('check-ssl error', error);
       return res.json({
-        status: 'error',
+        status: 'error' as Website['status'],
         lastChecked: new Date().toISOString()
       });
     }

@@ -29,7 +29,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex flex-col sm:flex-row items-center gap-3 mb-8 text-center sm:text-left">
           <Globe className="w-8 h-8 text-blue-500" />
           <h1 className="text-2xl font-bold text-gray-900">SSL Certificate Checker</h1>
@@ -145,7 +145,7 @@ function App() {
         </div>
       </div>
       <footer className="mt-16 border-t border-gray-200 py-12 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4">
+        <div className="max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">About</h3>
