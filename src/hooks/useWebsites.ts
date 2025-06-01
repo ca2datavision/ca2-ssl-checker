@@ -161,7 +161,7 @@ export function useWebsites() {
 
   const recheckWebsite = async (id: string) => {
     const website = websites.find(w => w.id === id);
-    if (!website || website.ignored) return;
+    if (!website) return;
 
     const { status, expiryDate, lastChecked, ip } = await checkSSL(website.url);
 

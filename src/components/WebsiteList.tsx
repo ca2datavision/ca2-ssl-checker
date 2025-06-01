@@ -125,9 +125,7 @@ export function WebsiteList({
   const handleRecheckCurrent = async () => {
     setIsRecheckingCurrent(true);
     const results = await Promise.all(
-      filteredWebsites
-        .filter(w => !w.ignored)
-        .map(async (website) => ({
+      filteredWebsites.map(async (website) => ({
           id: website.id,
           ...(await checkSSL(website.url))
         }))
