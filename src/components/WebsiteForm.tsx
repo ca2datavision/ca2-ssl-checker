@@ -14,9 +14,10 @@ export function WebsiteForm({ onSubmit, initialData, buttonText = 'Add Website' 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) return;
 
-    onSubmit({ url: normalizeUrl(url) });
+    onSubmit({ url: normalizeUrl(trimmedUrl) });
     if (!initialData) setUrl('');
   };
 

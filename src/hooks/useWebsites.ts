@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Website } from '../types';
 
 export function normalizeUrl(url: string): string {
-  let normalized = url.toLowerCase().trim();
+  let normalized = url.trim().toLowerCase();
   if (!normalized.startsWith('http')) {
     normalized = `https://${normalized}`;
   }
