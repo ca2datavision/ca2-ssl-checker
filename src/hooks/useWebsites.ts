@@ -9,7 +9,7 @@ function normalizeUrl(url: string): string {
   return normalized.replace(/\/+$/, ''); // Remove trailing slashes
 }
 
-async function checkSSL(url: string): Promise<{ status: Website['status']; expiryDate: string; lastChecked: string }> {
+async function checkSSL(url: string): Promise<{ status: Website['status']; expiryDate: string; lastChecked: string, ip: string }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -25,6 +25,7 @@ async function checkSSL(url: string): Promise<{ status: Website['status']; expir
 
     clearTimeout(timeoutId);
     const result = await response.json();
+    console.log(`SSL check for ${url}:`, result);
     return result;
   } catch (error) {
     return {
@@ -54,7 +55,7 @@ export function useWebsites() {
     if (exists) return;
 
     const newWebsite: Website = {
-      id: Math.random() + +new Date() + "",
+      id: crypto.randomUUID(),
       url: normalizedUrl,
       lastChecked: new Date().toISOString(),
       status: 'error',
@@ -62,11 +63,12 @@ export function useWebsites() {
     setWebsites(prev => [...prev, newWebsite]);
 
     // Check SSL after adding
-    checkSSL(normalizedUrl).then(({ status, expiryDate, lastChecked }) => {
+    checkSSL(normalizedUrl).then(({ status, expiryDate, lastChecked, ip }) => {
+      console.log(`SSL check for ${normalizedUrl}:`, { status, expiryDate, lastChecked, ip });
       setWebsites(prev =>
         prev.map(website =>
           website.id === newWebsite.id
-            ? { ...website, status, expiryDate, lastChecked }
+            ? { ...website, status, expiryDate, lastChecked, ip }
             : website
         )
       );
@@ -93,11 +95,11 @@ export function useWebsites() {
     );
 
     // Check SSL after updating
-    checkSSL(normalizedUrl).then(({ status, expiryDate, lastChecked }) => {
+    checkSSL(normalizedUrl).then(({ status, expiryDate, lastChecked, ip }) => {
       setWebsites(prev =>
         prev.map(website =>
           website.id === id
-            ? { ...website, status, expiryDate, lastChecked }
+            ? { ...website, status, expiryDate, lastChecked, ip }
             : website
         )
       );
@@ -154,6 +156,7 @@ export function useWebsites() {
               lastChecked: new Date().toISOString(),
               status: result.status,
               expiryDate: result.expiryDate,
+              ip: result.ip,
             }
           : website;
       })
@@ -164,8 +167,9 @@ export function useWebsites() {
     const website = websites.find(w => w.id === id);
     if (!website) return;
 
-    const { status, expiryDate, lastChecked } = await checkSSL(website.url);
+    const { status, expiryDate, lastChecked, ip } = await checkSSL(website.url);
 
+    console.log(`Rechecking ${website.url}:`, { status, expiryDate, lastChecked, ip });
     setWebsites(prev =>
       prev.map(website =>
         website.id === id
@@ -174,6 +178,7 @@ export function useWebsites() {
               lastChecked,
               status,
               expiryDate,
+              ip,
             }
           : website
       )
