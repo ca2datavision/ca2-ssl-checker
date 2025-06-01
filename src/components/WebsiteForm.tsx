@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { WebsiteFormData } from '../types';
+import { normalizeUrl } from '../hooks/useWebsites';
 
 interface WebsiteFormProps {
   onSubmit: (data: WebsiteFormData) => void;
@@ -14,18 +15,18 @@ export function WebsiteForm({ onSubmit, initialData, buttonText = 'Add Website' 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
-    
-    onSubmit({ url });
+
+    onSubmit({ url: normalizeUrl(url) });
     if (!initialData) setUrl('');
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2">
       <input
-        type="url"
+        type="text"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://example.com"
+        placeholder="example.com or https://example.com"
         required
         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       />
