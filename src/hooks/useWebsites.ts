@@ -13,8 +13,8 @@ async function checkSSL(url: string): Promise<{ status: Website['status']; expir
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    const response = await fetch('/ssl/api/check-ssl', { 
+
+    const response = await fetch('/ssl/api/check-ssl', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,13 +48,13 @@ export function useWebsites() {
 
   const addWebsite = (url: string) => {
     const normalizedUrl = normalizeUrl(url);
-    
+
     // Check for duplicates
     const exists = websites.some(w => normalizeUrl(w.url) === normalizedUrl);
     if (exists) return;
 
     const newWebsite: Website = {
-      id: crypto.randomUUID(),
+      id: Math.random() + +new Date() + "",
       url: normalizedUrl,
       lastChecked: new Date().toISOString(),
       status: 'error',
@@ -75,7 +75,7 @@ export function useWebsites() {
 
   const updateWebsite = (id: string, url: string) => {
     const normalizedUrl = normalizeUrl(url);
-    
+
     // Check for duplicates except self
     const exists = websites.some(w => w.id !== id && normalizeUrl(w.url) === normalizedUrl);
     if (exists) return;
@@ -129,7 +129,7 @@ export function useWebsites() {
       .map(url => normalizeUrl(url))
       .filter(Boolean);
     const existingUrls = new Set(websites.map(w => normalizeUrl(w.url)));
-    
+
     for (const url of urls) {
       if (!existingUrls.has(url)) {
         addWebsite(url);
