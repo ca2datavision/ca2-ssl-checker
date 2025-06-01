@@ -3,8 +3,9 @@ export interface Website {
   url: string;
   lastChecked?: string;
   expiryDate?: string;
-  status?: 'valid' | 'expired' | 'expires-soon' | 'expires-soon-warning' | 'error';
+  status?: 'valid' | 'expired' | 'expires-soon' | 'expires-soon-warning' | 'error' | 'ignired';
   ip?: string;
+  ignored?: boolean;
 }
 
 export interface WebsiteFormData {

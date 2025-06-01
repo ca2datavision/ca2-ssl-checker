@@ -15,7 +15,8 @@ function App() {
     recheckAllWebsites,
     exportWebsites,
     importWebsites,
-    removeAllWebsites
+    removeAllWebsites,
+    toggleIgnore
   } = useWebsites();
 
   const handleCopyLink = async () => {
@@ -47,6 +48,7 @@ function App() {
         <div className="space-y-6">
           <h2 className="text-lg font-medium text-gray-900">Monitored Websites</h2>
           <WebsiteList
+            onToggleIgnore={toggleIgnore}
             setWebsites={setWebsites}
             websites={websites}
             onUpdate={updateWebsite}
