@@ -1,277 +1,17 @@
-import React, { useState } from 'react';
-import { Pencil, Trash2, RefreshCw, Globe, RotateCw, Download, Upload, GripVertical, Share2, Copy, EyeOff, Eye } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { RotateCw, Download, Upload, Trash2 } from 'lucide-react';
 import { DndContext, DragEndEvent, MouseSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Website, WebsiteFormData } from '../types';
-import { WebsiteForm } from './WebsiteForm';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { Website } from '../types';
+import { checkSSL } from '../hooks/useWebsites';
 import { useToast } from '../hooks/useToast';
 import { ToastContainer } from './Toast';
+import { WebsiteStats } from './website/WebsiteStats';
+import { WebsiteItem } from './website/WebsiteItem';
+import { EmptyState } from './website/EmptyState';
+import { DeleteConfirmation } from './website/DeleteConfirmation';
 
 type StatusFilter = Website['status'] | null;
-
-const getStatusColor = (status: Website['status']) => {
-  switch (status) {
-    case 'valid':
-      return 'text-green-600 bg-green-50';
-    case 'expires-soon-warning':
-      return 'text-yellow-600 bg-yellow-50';
-    case 'expires-soon':
-      return 'text-orange-600 bg-orange-50';
-    case 'expired':
-      return 'text-red-600 bg-red-50';
-    case 'error':
-      return 'text-gray-600 bg-gray-50';
-    default:
-      return 'text-gray-600 bg-gray-50';
-  }
-};
-
-interface SortableWebsiteItemProps {
-  website: Website;
-  onRecheck: (id: string) => Promise<void>;
-  onUpdate: (id: string, data: WebsiteFormData) => void;
-  onDelete: (id: string) => void;
-  onToggleIgnore: (id: string) => void;
-  editingId: string | null;
-  setEditingId: (id: string | null) => void;
-  recheckingId: string | null;
-  getStatusColor: (status: Website['status']) => string;
-}
-
-interface WebsiteStatsProps {
-  websites: Website[];
-  activeFilter: StatusFilter;
-  onFilterChange: (status: StatusFilter) => void;
-}
-
-function WebsiteStats({ websites, activeFilter, onFilterChange }: WebsiteStatsProps) {
-  const stats = websites.reduce((acc, website) => {
-    if (website.ignored) {
-      acc.ignored = (acc.ignored || 0) + 1;
-    } else {
-      acc[website.status || 'error'] = (acc[website.status || 'error'] || 0) + 1;
-    }
-    return acc;
-  }, {} as Record<Website['status'] | 'ignored', number>);
-
-  const statusLabels: Record<Website['status'] | 'ignored', string> = {
-    'valid': 'valid',
-    'expired': 'expired',
-    'expires-soon': 'expiring soon',
-    'expires-soon-warning': 'expiring this month',
-    'error': 'with errors',
-    'ignored': 'ignored'
-  };
-
-  const handleFilterClick = (status: Website['status'] | 'ignored') => {
-    onFilterChange(activeFilter === status ? null : status as Website['status']);
-  };
-
-  return (
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-3 text-sm">
-          {Object.entries(stats).map(([status, count]) => count > 0 && (
-              <button
-                  key={status}
-                  onClick={() => handleFilterClick(status as Website['status'] | 'ignored')}
-                  className={`px-2 py-1 rounded-full transition-colors ${
-                      status === 'ignored' ? 'text-gray-600 bg-gray-100' : getStatusColor(status as Website['status'])
-                  } ${
-                      activeFilter === status ? 'ring-2 ring-blue-500 ring-offset-2' : ''
-                  } hover:ring-2 hover:ring-blue-500 hover:ring-offset-2`}
-              >
-                {count} {status === 'ignored' ? 'ignored' : statusLabels[status as Website['status']]}
-              </button>
-          ))}
-        </div>
-        {activeFilter && (
-            <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">
-            Showing only {activeFilter === 'ignored' ? 'ignored' : statusLabels[activeFilter]} websites
-          </span>
-              <button
-                  onClick={() => onFilterChange(null)}
-                  className="text-sm text-blue-500 hover:text-blue-600"
-              >
-                Clear filter
-              </button>
-            </div>
-        )}
-      </div>
-  );
-}
-
-function SortableWebsiteItem({
-                               website,
-                               onRecheck,
-                               onUpdate,
-                               onDelete,
-                               onToggleIgnore,
-                               editingId,
-                               setEditingId,
-                               recheckingId,
-                               getStatusColor
-                             }: SortableWebsiteItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: website.id });
-
-  const getTimeRemaining = (expiryDate: string) => {
-    const now = new Date();
-    const expiry = new Date(expiryDate);
-    const diffMs = expiry.getTime() - now.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
-    if (diffDays > 0) {
-      return `${diffDays} day${diffDays !== 1 ? 's' : ''} remaining`;
-    } else if (diffHours > 0) {
-      return `${diffHours} hour${diffHours !== 1 ? 's' : ''} remaining`;
-    } else {
-      return 'Expired';
-    }
-  };
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 1 : 0
-  };
-
-  const handleShare = async () => {
-    try {
-      await navigator.share({
-        title: 'SSL Certificate Status',
-        text: `SSL certificate for ${website.url} is ${website.status}. Expires: ${website.expiryDate ? new Date(website.expiryDate).toLocaleDateString() : 'N/A'}`,
-        url: window.location.href
-      });
-    } catch (error) {
-      console.error('Error sharing:', error);
-    }
-  };
-
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(`Copied ${text} to clipboard`);
-    } catch (error) {
-      console.error('Failed to copy:', error);
-      showToast('Failed to copy to clipboard', 'error');
-    }
-  };
-
-  const getHostname = (url: string) => {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return url;
-    }
-  };
-
-  return (
-      <div
-          ref={setNodeRef}
-          style={style}
-          className={`bg-white rounded-lg shadow-sm border border-gray-200 p-4 ${isDragging ? 'opacity-50' : ''}`}
-      >
-        {editingId === website.id ? (
-            <WebsiteForm
-                onSubmit={(data) => onUpdate(website.id, data)}
-                initialData={{ url: website.url }}
-                buttonText="Save"
-            />
-        ) : (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center flex-1 gap-2 min-w-0">
-                <button
-                    className="p-2 text-gray-400 cursor-grab active:cursor-grabbing touch-none"
-                    {...attributes}
-                    {...listeners}>
-                  <GripVertical className="w-4 h-4" />
-                </button>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 group">
-                    <h3 className="font-medium text-gray-900 truncate">{website.url}</h3>
-                    <button
-                        onClick={() => copyToClipboard(getHostname(website.url))}
-                        className="hidden group-hover:inline-flex p-1 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
-                        title="Copy hostname">
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {website.ip && (
-                      <div className="flex items-center gap-2 mt-1 group">
-                        <p className="text-sm text-gray-500">IP: {website.ip}</p>
-                        <button
-                            onClick={() => copyToClipboard(website.ip!)}
-                            className="hidden group-hover:inline-flex p-1 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
-                            title="Copy IP">
-                          <Copy className="w-4 h-4" />
-                        </button>
-                      </div>
-                  )}
-                  <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-500">
-                    <span className="whitespace-nowrap">Last checked: {new Date(website.lastChecked!).toLocaleString()}</span>
-                    <span className={`px-2 py-1 rounded-full ${getStatusColor(website.status)}`}>
-                  {website.status}
-                </span>
-                    {website.expiryDate && (
-                        <span className="whitespace-nowrap">
-                    Expires: {new Date(website.expiryDate).toLocaleDateString()} ({getTimeRemaining(website.expiryDate)})
-                  </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 justify-end">
-                {'share' in navigator && (
-                    <button
-                        onClick={handleShare}
-                        className="p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-                )}
-                <button
-                    onClick={() => onRecheck(website.id)}
-                    className={`p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100 ${
-                        recheckingId === website.id ? 'animate-spin' : ''
-                    }`}
-                    disabled={recheckingId === website.id}
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => setEditingId(website.id)}
-                    className="p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => onToggleIgnore(website.id)}
-                    className="p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
-                    title={website.ignored ? "Unignore" : "Ignore"}>
-                  {website.ignored ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </button>
-                <button
-                    onClick={() => onDelete(website.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-        )}
-      </div>
-  );
-}
 
 interface WebsiteListProps {
   websites: Website[];
@@ -287,17 +27,17 @@ interface WebsiteListProps {
 }
 
 export function WebsiteList({
-                              websites,
-                              onUpdate,
-                              onDelete,
-                              onRecheck,
-                              onRecheckAll,
-                              onExport,
-                              onImport,
-                              onDeleteAll,
-                              setWebsites,
-                              onToggleIgnore
-                            }: WebsiteListProps) {
+  websites,
+  onUpdate,
+  onDelete,
+  onRecheck,
+  onRecheckAll,
+  onExport,
+  onImport,
+  onDeleteAll,
+  setWebsites,
+  onToggleIgnore
+}: WebsiteListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [recheckingId, setRecheckingId] = useState<string | null>(null);
   const [isRecheckingAll, setIsRecheckingAll] = useState(false);
@@ -305,29 +45,30 @@ export function WebsiteList({
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toasts, showToast } = useToast();
+  const [isRecheckingCurrent, setIsRecheckingCurrent] = useState(false);
 
   const filteredWebsites = websites
-      .filter(w => {
-        if (statusFilter === null) return true;
-        if (statusFilter === 'ignored') return w.ignored;
-        return !w.ignored && w.status === statusFilter;
-      })
-      .filter(w => !searchQuery || w.url.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter(w => {
+      if (statusFilter === null) return true;
+      if (statusFilter === 'ignored') return w.ignored;
+      return !w.ignored && w.status === statusFilter;
+    })
+    .filter(w => !searchQuery || w.url.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const sensors = useSensors(
-      useSensor(MouseSensor, {
-        activationConstraint: {
-          distance: 10,
-        },
-      }),
-      useSensor(TouchSensor, {
-        activationConstraint: {
-          delay: 250,
-          tolerance: 5,
-        },
-      })
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 10,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    })
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -358,27 +99,54 @@ export function WebsiteList({
     // Only recheck non-ignored websites
     const activeWebsites = websites.filter(w => !w.ignored);
     const results = await Promise.all(
-        activeWebsites.map(async (website) => ({
+      activeWebsites.map(async (website) => ({
+        id: website.id,
+        ...(await checkSSL(website.url))
+      }))
+    );
+
+    setWebsites(prev =>
+      prev.map(website => {
+        const result = results.find(r => r.id === website.id);
+        return result && !website.ignored
+          ? {
+              ...website,
+              lastChecked: new Date().toISOString(),
+              status: result.status,
+              expiryDate: result.expiryDate,
+              ip: result.ip,
+            }
+          : website;
+      })
+    );
+    setIsRecheckingAll(false);
+  };
+
+  const handleRecheckCurrent = async () => {
+    setIsRecheckingCurrent(true);
+    const results = await Promise.all(
+      filteredWebsites
+        .filter(w => !w.ignored)
+        .map(async (website) => ({
           id: website.id,
           ...(await checkSSL(website.url))
         }))
     );
 
     setWebsites(prev =>
-        prev.map(website => {
-          const result = results.find(r => r.id === website.id);
-          return result && !website.ignored
-              ? {
-                ...website,
-                lastChecked: new Date().toISOString(),
-                status: result.status,
-                expiryDate: result.expiryDate,
-                ip: result.ip,
-              }
-              : website;
-        })
+      prev.map(website => {
+        const result = results.find(r => r.id === website.id);
+        return result
+          ? {
+              ...website,
+              lastChecked: new Date().toISOString(),
+              status: result.status,
+              expiryDate: result.expiryDate,
+            }
+          : website
+      })
     );
-    setIsRecheckingAll(false);
+    setIsRecheckingCurrent(false);
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -399,173 +167,138 @@ export function WebsiteList({
 
   if (websites.length === 0) {
     return (
-        <div className="space-y-6">
-          <div className="flex gap-2 justify-end">
-            <input
-                type="file"
-                accept=".txt"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={handleImport}
-            />
-            <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Upload className="w-4 h-4" />
-              Import
-            </button>
-            <button
-                onClick={onExport}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-          </div>
-          <div className="text-center py-12 bg-white rounded-lg shadow-sm border border-gray-200">
-            <Globe className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p className="text-gray-600">No websites added yet.</p>
-            <p className="text-sm text-gray-500 mt-2">Add one above or import from a file to get started!</p>
-          </div>
-        </div>
+      <EmptyState
+        onImport={handleImport}
+        onExport={onExport}
+        fileInputRef={fileInputRef}
+      />
     );
   }
 
   return (
-      <div className="space-y-4">
-        <WebsiteStats
-            websites={websites}
-            activeFilter={statusFilter}
-            onFilterChange={setStatusFilter}
-        />
-
-        <div className="relative">
-          <div className="flex items-center">
-            <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search websites..."
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {searchQuery && (
-                <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 text-gray-400 hover:text-gray-600"
-                >
-                  <span className="sr-only">Clear search</span>
-                  ×
-                </button>
-            )}
-          </div>
+    <div className="space-y-4">
+      <WebsiteStats
+        websites={websites}
+        activeFilter={statusFilter}
+        onFilterChange={setStatusFilter}
+      />
+      
+      <div className="relative">
+        <div className="flex items-center">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search websites..."
+            className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 text-gray-400 hover:text-gray-600"
+            >
+              <span className="sr-only">Clear search</span>
+              ×
+            </button>
+          )}
         </div>
-        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-          <div className="flex flex-wrap gap-2">
-            <input
-                type="file"
-                accept=".txt"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={handleImport}
-            />
-            <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Upload className="w-4 h-4" />
-              Import
-            </button>
-            <button
-                onClick={onExport}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-            {websites.length > 0 && (
-                <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete All
-                </button>
-            )}
-          </div>
+      </div>
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="file"
+            accept=".txt"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleImport}
+          />
           <button
-              onClick={handleRecheckAll}
-              disabled={isRecheckingAll}
-              className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isRecheckingAll ? 'cursor-wait' : ''
-              }`}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            <Upload className="w-4 h-4" />
+            Import
+          </button>
+          <button
+            onClick={onExport}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+          {websites.length > 0 && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete All
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleRecheckCurrent}
+            disabled={isRecheckingCurrent || filteredWebsites.length === 0}
+            className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isRecheckingCurrent ? 'cursor-wait' : ''
+            }`}
+          >
+            <RotateCw className={`w-4 h-4 ${isRecheckingCurrent ? 'animate-spin' : ''}`} />
+            Recheck Current
+          </button>
+          <button
+            onClick={handleRecheckAll}
+            disabled={isRecheckingAll}
+            className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isRecheckingAll ? 'cursor-wait' : ''
+            }`}
           >
             <RotateCw className={`w-4 h-4 ${isRecheckingAll ? 'animate-spin' : ''}`} />
             Recheck All
           </button>
         </div>
-
-        {showDeleteConfirm && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <h3 className="text-red-800 font-medium mb-2">Confirm Deletion</h3>
-              <p className="text-red-600 text-sm mb-3">
-                Type 'delete all' to confirm deletion of all websites. This action cannot be undone.
-              </p>
-              <div className="flex gap-2">
-                <input
-                    type="text"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    placeholder="Type 'delete all'"
-                    className="flex-1 px-3 py-2 border border-red-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-                <button
-                    onClick={handleDeleteAll}
-                    disabled={deleteConfirmText !== 'delete all'}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Confirm
-                </button>
-                <button
-                    onClick={() => {
-                      setShowDeleteConfirm(false);
-                      setDeleteConfirmText('');
-                    }}
-                    className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-        )}
-
-        <DndContext
-            sensors={sensors}
-            onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-              items={filteredWebsites.map(w => w.id)}
-              strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-4">
-              {filteredWebsites.map(website => (
-                  <SortableWebsiteItem
-                      key={website.id}
-                      website={website}
-                      onRecheck={handleRecheck}
-                      onUpdate={handleUpdate}
-                      onDelete={onDelete}
-                      editingId={editingId}
-                      setEditingId={setEditingId}
-                      recheckingId={recheckingId}
-                      getStatusColor={getStatusColor}
-                      onToggleIgnore={onToggleIgnore}
-                  />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-        <ToastContainer toasts={toasts} />
       </div>
+      
+      {showDeleteConfirm && (
+        <DeleteConfirmation
+          deleteConfirmText={deleteConfirmText}
+          setDeleteConfirmText={setDeleteConfirmText}
+          onConfirm={handleDeleteAll}
+          onCancel={() => {
+            setShowDeleteConfirm(false);
+            setDeleteConfirmText('');
+          }}
+        />
+      )}
+
+      <DndContext
+        sensors={sensors}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={filteredWebsites.map(w => w.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="space-y-4">
+            {filteredWebsites.map(website => (
+              <WebsiteItem
+                key={website.id}
+                website={website}
+                onRecheck={handleRecheck}
+                onUpdate={handleUpdate}
+                onDelete={onDelete}
+                editingId={editingId}
+                setEditingId={setEditingId}
+                recheckingId={recheckingId}
+                showToast={showToast}
+                onToggleIgnore={onToggleIgnore}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+      <ToastContainer toasts={toasts} />
+    </div>
   );
 }
